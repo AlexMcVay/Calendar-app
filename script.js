@@ -136,74 +136,77 @@ class Calendar {
   }
 
   /**
-   * Automatically schedule all unscheduled tasks
-   */
-  autoScheduleTasks() {
+ * Automatically schedule all unscheduled tasks
+ */
+autoScheduleTasks() {
     // Clear previous scheduling for all tasks
     this.tasks.forEach(task => {
-      task.isScheduled = false;
-      task.scheduledStart = null;
-      task.scheduledEnd = null;
+        task.isScheduled = false;
+        task.scheduledStart = null;
+        task.scheduledEnd = null;
     });
-    
+
+    // Remove previously scheduled tasks from the events array
+    this.events = this.events.filter(event => !event.isTask);
+
     // Sort tasks by priority (highest first) and deadline (earliest first)
     const taskQueue = [...this.tasks].sort((a, b) => {
-      if (a.priority !== b.priority) {
-        return b.priority - a.priority; // Higher priority first
-      }
-      return a.deadline - b.deadline; // Earlier deadline first
+        if (a.priority !== b.priority) {
+            return b.priority - a.priority; // Higher priority first
+        }
+        return a.deadline - b.deadline; // Earlier deadline first
     });
-    
+
     // Get all available time slots
     const now = new Date();
     const twoWeeksFromNow = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
     const availableSlots = this.getAvailableSlots(now, twoWeeksFromNow);
-    
+
     // Schedule each task
     taskQueue.forEach(task => {
-      // Find a suitable slot for this task
-      for (let i = 0; i < availableSlots.length; i++) {
-        const slot = availableSlots[i];
-        const slotDuration = (slot.end - slot.start) / (60 * 1000); // in minutes
-        
-        if (slotDuration >= task.duration) {
-          // Schedule the task in this slot
-          task.scheduledStart = new Date(slot.start);
-          task.scheduledEnd = new Date(slot.start.getTime() + task.duration * 60 * 1000);
-          task.isScheduled = true;
-          
-          // Update the available slot
-          if (slotDuration === task.duration) {
-            // Remove this slot as it's fully used
-            availableSlots.splice(i, 1);
-          } else {
-            // Reduce the slot size
-            slot.start = new Date(slot.start.getTime() + task.duration * 60 * 1000 + 
-                                 this.settings.minBreakBetweenTasks * 60 * 1000);
-          }
-          
-          // Add the scheduled task to events
-          this.events.push({
-            id: task.id,
-            name: task.name,
-            start: task.scheduledStart,
-            end: task.scheduledEnd,
-            isFixed: false,
-            isTask: true,
-            taskId: task.id
-          });
-          
-          break;
+        // Find a suitable slot for this task
+        for (let i = 0; i < availableSlots.length; i++) {
+            const slot = availableSlots[i];
+            const slotDuration = (slot.end - slot.start) / (60 * 1000); // in minutes
+
+            if (slotDuration >= task.duration) {
+                // Schedule the task in this slot
+                task.scheduledStart = new Date(slot.start);
+                task.scheduledEnd = new Date(slot.start.getTime() + task.duration * 60 * 1000);
+                task.isScheduled = true;
+
+                // Update the available slot
+                if (slotDuration === task.duration) {
+                    // Remove this slot as it's fully used
+                    availableSlots.splice(i, 1);
+                } else {
+                    // Reduce the slot size
+                    slot.start = new Date(slot.start.getTime() + task.duration * 60 * 1000 + 
+                                         this.settings.minBreakBetweenTasks * 60 * 1000);
+                }
+
+                // Add the scheduled task to events
+                this.events.push({
+                    id: task.id,
+                    name: task.name,
+                    start: task.scheduledStart,
+                    end: task.scheduledEnd,
+                    isFixed: false,
+                    isTask: true,
+                    taskId: task.id
+                });
+
+                break;
+            }
         }
-      }
-      
-      if (!task.isScheduled) {
-        console.warn(`Could not schedule task: ${task.name}`);
-      }
+
+        if (!task.isScheduled) {
+            console.warn(`Could not schedule task: ${task.name}`);
+        }
     });
-    
+
     console.log(`Scheduled ${this.tasks.filter(t => t.isScheduled).length} out of ${this.tasks.length} tasks`);
-  }
+}
 
   /**
    * Get available time slots between start and end dates
