@@ -117,6 +117,11 @@
             background-color: #fef9e7;
             border-left: 4px solid #f1c40f;
         }
+        
+        .imported-event {
+            background-color: #f4e8f8;
+            border-left: 4px solid #9b59b6;
+        }
 
         .event-time {
             font-weight: 500;
@@ -133,6 +138,10 @@
             padding: 3px 8px;
             border-radius: 12px;
             font-size: 12px;
+        }
+        
+        .imported-badge {
+            background-color: #9b59b6;
         }
 
         .task-details {
@@ -195,6 +204,47 @@
         .checkbox-group input {
             width: auto;
             margin-right: 5px;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+        }
+        
+        .modal-content {
+            background: white;
+            margin: 50px auto;
+            padding: 30px;
+            max-width: 600px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        }
+        
+        .status-message {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        
+        .status-success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .status-error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        
+        .status-info {
+            background-color: #d1ecf1;
+            color: #0c5460;
         }
     </style>
     <script src="script.js" defer></script>
@@ -318,6 +368,7 @@
                 <button onclick="exportCalendar()" style="margin-top: 10px;">Export Calendar</button>
                 <input type="file" id="import-file" style="display: none;" onchange="importCalendar(this)">
                 <button onclick="document.getElementById('import-file').click()" style="margin-top: 10px;">Import Calendar</button>
+                <button onclick="showGoogleCalendarImport()" style="margin-top: 10px; background-color: #9b59b6;">Import Google Calendar</button>
             </div>
         </div>
 
@@ -326,6 +377,44 @@
             <div id="calendar">
                 <!-- Calendar will be rendered here -->
             </div>
+        </div>
+    </div>
+    
+    <!-- Google Calendar Import Modal -->
+    <div id="google-calendar-modal" class="modal">
+        <div class="modal-content">
+            <h3>Import Google Calendar</h3>
+            <p><strong>Step 1:</strong> Get your calendar's .ics URL from Google Calendar:</p>
+            <ol style="font-size: 14px; margin: 10px 0; padding-left: 20px;">
+                <li>Open <a href="https://calendar.google.com" target="_blank">Google Calendar</a></li>
+                <li>Go to Settings → Settings for my calendars → [Your Calendar]</li>
+                <li>Scroll to "Integrate calendar"</li>
+                <li>Copy the "Public URL to this calendar" (.ics format)</li>
+            </ol>
+            <div class="form-group">
+                <label for="google-calendar-url">Paste your .ics URL here:</label>
+                <input type="text" id="google-calendar-url" placeholder="https://calendar.google.com/calendar/ical/...@gmail.com/public/basic.ics">
+                <small style="color: #7f8c8d; display: block; margin-top: 5px;">
+                    Or just paste your calendar email (e.g., yourname@gmail.com)
+                </small>
+            </div>
+            <div class="form-group">
+                <label for="import-date-range">Import events from:</label>
+                <select id="import-date-range">
+                    <option value="7">Next 7 days</option>
+                    <option value="14" selected>Next 14 days</option>
+                    <option value="30">Next 30 days</option>
+                    <option value="90">Next 90 days</option>
+                </select>
+            </div>
+            <div style="background: #fff3cd; border: 1px solid #ffc107; padding: 10px; border-radius: 4px; margin: 15px 0; font-size: 14px;">
+                ⚠️ <strong>Important:</strong> Your calendar must be set to <strong>public</strong> for this to work.
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button onclick="importGoogleCalendar()">Import</button>
+                <button onclick="hideGoogleCalendarImport()" style="background-color: #95a5a6;">Cancel</button>
+            </div>
+            <div id="import-status"></div>
         </div>
     </div>
 
@@ -441,6 +530,40 @@
                     }
                 };
                 reader.readAsText(file);
+            }
+        }
+        
+        // Google Calendar import functions
+        function showGoogleCalendarImport() {
+            document.getElementById('google-calendar-modal').style.display = 'block';
+        }
+        
+        function hideGoogleCalendarImport() {
+            document.getElementById('google-calendar-modal').style.display = 'none';
+            document.getElementById('import-status').innerHTML = '';
+        }
+        
+        async function importGoogleCalendar() {
+            const urlInput = document.getElementById('google-calendar-url').value.trim();
+            const daysRange = parseInt(document.getElementById('import-date-range').value);
+            const statusEl = document.getElementById('import-status');
+            
+            if (!urlInput) {
+                statusEl.innerHTML = '<div class="status-message status-error">Please enter a calendar URL or ID</div>';
+                return;
+            }
+            
+            statusEl.innerHTML = '<div class="status-message status-info">Importing calendar events...</div>';
+            
+            try {
+                await autoScheduler.importGoogleCalendar(urlInput, daysRange);
+                statusEl.innerHTML = '<div class="status-message status-success">Calendar imported successfully!</div>';
+                
+                setTimeout(() => {
+                    hideGoogleCalendarImport();
+                }, 2000);
+            } catch (error) {
+                statusEl.innerHTML = `<div class="status-message status-error">Error: ${error.message}</div>`;
             }
         }
     </script>

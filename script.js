@@ -23,6 +23,7 @@ class Calendar {
     this.autoScheduleTasks = this.autoScheduleTasks.bind(this);
     this.getAvailableSlots = this.getAvailableSlots.bind(this);
     this.renderCalendar = this.renderCalendar.bind(this);
+    this.importGoogleCalendar = this.importGoogleCalendar.bind(this);
     
     // Initialize
     this.initCalendar();
@@ -126,7 +127,8 @@ class Calendar {
       name: event.name,
       start: event.start,
       end: event.end,
-      isFixed: true
+      isFixed: true,
+      isImported: event.isImported || false
     };
     
     this.events.push(newEvent);
@@ -136,9 +138,9 @@ class Calendar {
   }
 
   /**
- * Automatically schedule all unscheduled tasks
- */
-autoScheduleTasks() {
+   * Automatically schedule all unscheduled tasks
+   */
+  autoScheduleTasks() {
     // Clear previous scheduling for all tasks
     this.tasks.forEach(task => {
         task.isScheduled = false;
@@ -206,7 +208,7 @@ autoScheduleTasks() {
     });
 
     console.log(`Scheduled ${this.tasks.filter(t => t.isScheduled).length} out of ${this.tasks.length} tasks`);
-}
+  }
 
   /**
    * Get available time slots between start and end dates
@@ -321,15 +323,30 @@ autoScheduleTasks() {
       
       dateEvents.forEach(event => {
         const eventItem = document.createElement('li');
-        eventItem.className = event.isTask ? 'task-event' : 'fixed-event';
+        
+        // Determine event class
+        if (event.isImported) {
+          eventItem.className = 'imported-event';
+        } else if (event.isTask) {
+          eventItem.className = 'task-event';
+        } else {
+          eventItem.className = 'fixed-event';
+        }
         
         const startTime = event.start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         const endTime = event.end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         
+        let badgeHTML = '';
+        if (event.isTask) {
+          badgeHTML = '<span class="event-badge">Task</span>';
+        } else if (event.isImported) {
+          badgeHTML = '<span class="event-badge imported-badge">Imported</span>';
+        }
+        
         eventItem.innerHTML = `
           <span class="event-time">${startTime} - ${endTime}</span>
           <span class="event-name">${event.name}</span>
-          ${event.isTask ? '<span class="event-badge">Task</span>' : ''}
+          ${badgeHTML}
         `;
         
         eventsList.appendChild(eventItem);
@@ -366,6 +383,242 @@ autoScheduleTasks() {
   }
 
   /**
+   * Import events from a public Google Calendar
+   * @param {String} calendarInput - Calendar URL or ID or .ics URL
+   * @param {Number} daysAhead - Number of days to import (default 14)
+   */
+  async importGoogleCalendar(calendarInput, daysAhead = 14) {
+    try {
+      console.log('Starting import with input:', calendarInput);
+      
+      // Determine if input is already an .ics URL
+      let icalUrl;
+      if (calendarInput.includes('.ics')) {
+        // Already an .ics URL, use it directly
+        icalUrl = calendarInput;
+        console.log('Using provided .ics URL directly');
+      } else {
+        // Extract calendar ID and construct .ics URL
+        const calendarId = this.extractCalendarId(calendarInput);
+        
+        if (!calendarId) {
+          throw new Error('Invalid calendar URL or ID format. Please provide an email address, calendar URL, or direct .ics link.');
+        }
+        
+        // Construct iCalendar URL
+        icalUrl = `https://calendar.google.com/calendar/ical/${encodeURIComponent(calendarId)}/public/basic.ics`;
+      }
+      
+      console.log('Fetching calendar from:', icalUrl);
+      
+      // Calculate date range
+      const now = new Date();
+      const futureDate = new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000);
+      
+      // Try multiple CORS proxy options
+      const proxyOptions = [
+        'https://api.allorigins.win/raw?url=',
+        'https://corsproxy.io/?',
+        'https://api.codetabs.com/v1/proxy?quest='
+      ];
+      
+      let icalData = null;
+      let lastError = null;
+      
+      // Try each proxy until one works
+      for (const proxyUrl of proxyOptions) {
+        try {
+          console.log('Trying proxy:', proxyUrl);
+          const response = await fetch(proxyUrl + encodeURIComponent(icalUrl), {
+            method: 'GET',
+            headers: {
+              'Accept': 'text/calendar'
+            }
+          });
+          
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          
+          icalData = await response.text();
+          
+          // Check if we got valid iCalendar data
+          if (!icalData || !icalData.includes('BEGIN:VCALENDAR')) {
+            throw new Error('Response does not contain valid iCalendar data');
+          }
+          
+          console.log('Successfully fetched calendar data');
+          break; // Success, exit loop
+        } catch (error) {
+          console.warn(`Proxy ${proxyUrl} failed:`, error.message);
+          lastError = error;
+          continue; // Try next proxy
+        }
+      }
+      
+      if (!icalData) {
+        throw new Error(`Failed to fetch calendar after trying multiple proxies. Last error: ${lastError?.message || 'Unknown error'}. Make sure the calendar is public.`);
+      }
+      
+      console.log('Parsing calendar data...');
+      
+      // Parse iCalendar data
+      const events = this.parseICalendar(icalData, now, futureDate);
+      
+      if (events.length === 0) {
+        console.warn('No events found in the specified date range');
+        throw new Error(`No events found in the next ${daysAhead} days. Try a longer date range or check if the calendar has events.`);
+      }
+      
+      console.log(`Parsed ${events.length} events`);
+      
+      // Add events to calendar
+      let importedCount = 0;
+      events.forEach(event => {
+        this.addEvent({
+          name: event.summary || 'Untitled Event',
+          start: event.start,
+          end: event.end,
+          isFixed: true,
+          isImported: true
+        });
+        importedCount++;
+      });
+      
+      // Re-schedule tasks to account for new events
+      this.autoScheduleTasks();
+      this.renderCalendar();
+      
+      console.log(`Successfully imported ${importedCount} events from Google Calendar`);
+      
+      return { success: true, count: importedCount };
+    } catch (error) {
+      console.error('Error importing Google Calendar:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Extract calendar ID from various input formats
+   * @param {String} input - Calendar URL or ID
+   * @returns {String} Calendar ID
+   */
+  extractCalendarId(input) {
+    // If it's just an email address, return it
+    if (input.includes('@') && !input.includes('/')) {
+      return input;
+    }
+    
+    // Try to extract from embed URL
+    const srcMatch = input.match(/src=([^&]+)/);
+    if (srcMatch) {
+      return decodeURIComponent(srcMatch[1]);
+    }
+    
+    // Try to extract from ical URL
+    const icalMatch = input.match(/calendar\/ical\/([^\/]+)/);
+    if (icalMatch) {
+      return decodeURIComponent(icalMatch[1]);
+    }
+    
+    // Return as-is if no pattern matches
+    return input;
+  }
+
+  /**
+   * Parse iCalendar format data
+   * @param {String} icalData - iCalendar format string
+   * @param {Date} startDate - Filter events after this date
+   * @param {Date} endDate - Filter events before this date
+   * @returns {Array} Parsed events
+   */
+  parseICalendar(icalData, startDate, endDate) {
+    const events = [];
+    const lines = icalData.split(/\r?\n/);
+    
+    let currentEvent = null;
+    let currentProperty = '';
+    
+    for (let i = 0; i < lines.length; i++) {
+      let line = lines[i].trim();
+      
+      // Handle line continuation (lines starting with space or tab)
+      while (i + 1 < lines.length && /^[ \t]/.test(lines[i + 1])) {
+        i++;
+        line += lines[i].trim();
+      }
+      
+      if (line === 'BEGIN:VEVENT') {
+        currentEvent = {};
+      } else if (line === 'END:VEVENT' && currentEvent) {
+        // Only add events within the date range
+        if (currentEvent.start && currentEvent.end) {
+          if (currentEvent.start <= endDate && currentEvent.end >= startDate) {
+            events.push(currentEvent);
+          }
+        }
+        currentEvent = null;
+      } else if (currentEvent) {
+        const colonIndex = line.indexOf(':');
+        if (colonIndex > 0) {
+          const property = line.substring(0, colonIndex);
+          const value = line.substring(colonIndex + 1);
+          
+          // Parse different properties
+          if (property.startsWith('DTSTART')) {
+            currentEvent.start = this.parseICalDate(value);
+          } else if (property.startsWith('DTEND')) {
+            currentEvent.end = this.parseICalDate(value);
+          } else if (property === 'SUMMARY') {
+            currentEvent.summary = value;
+          } else if (property === 'DESCRIPTION') {
+            currentEvent.description = value;
+          } else if (property === 'LOCATION') {
+            currentEvent.location = value;
+          }
+        }
+      }
+    }
+    
+    return events;
+  }
+
+  /**
+   * Parse iCalendar date format to JavaScript Date
+   * @param {String} icalDate - iCalendar date string
+   * @returns {Date} JavaScript Date object
+   */
+  parseICalDate(icalDate) {
+    // Remove TZID and other parameters
+    icalDate = icalDate.split(':').pop();
+    
+    // iCalendar format: YYYYMMDDTHHMMSSZ or YYYYMMDD
+    if (icalDate.length === 8) {
+      // All-day event (YYYYMMDD)
+      const year = parseInt(icalDate.substring(0, 4));
+      const month = parseInt(icalDate.substring(4, 6)) - 1;
+      const day = parseInt(icalDate.substring(6, 8));
+      return new Date(year, month, day);
+    } else {
+      // Date with time
+      const year = parseInt(icalDate.substring(0, 4));
+      const month = parseInt(icalDate.substring(4, 6)) - 1;
+      const day = parseInt(icalDate.substring(6, 8));
+      const hour = parseInt(icalDate.substring(9, 11));
+      const minute = parseInt(icalDate.substring(11, 13));
+      const second = parseInt(icalDate.substring(13, 15));
+      
+      if (icalDate.endsWith('Z')) {
+        // UTC time
+        return new Date(Date.UTC(year, month, day, hour, minute, second));
+      } else {
+        // Local time
+        return new Date(year, month, day, hour, minute, second);
+      }
+    }
+  }
+
+  /**
    * Generate a unique ID
    * @returns {String} Unique ID
    */
@@ -390,8 +643,17 @@ autoScheduleTasks() {
    * @param {Object} data - Calendar data to import
    */
   importData(data) {
-    if (data.events) this.events = data.events;
-    if (data.tasks) this.tasks = data.tasks;
+    if (data.events) this.events = data.events.map(e => ({
+      ...e,
+      start: new Date(e.start),
+      end: new Date(e.end)
+    }));
+    if (data.tasks) this.tasks = data.tasks.map(t => ({
+      ...t,
+      deadline: new Date(t.deadline),
+      scheduledStart: t.scheduledStart ? new Date(t.scheduledStart) : null,
+      scheduledEnd: t.scheduledEnd ? new Date(t.scheduledEnd) : null
+    }));
     if (data.settings) this.settings = data.settings;
     
     this.renderCalendar();
