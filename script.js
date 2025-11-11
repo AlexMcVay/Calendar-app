@@ -111,16 +111,20 @@ class Calendar {
             priority: taskPriority,
             duration: taskDuration,
             deadline: new Date(taskDeadline),
-            isScheduled: false
+            isScheduled: false,
+            isCompleate:false
           });
 
           // Auto-schedule after adding a new task
           this.autoScheduleTasks();
           this.renderCalendar();
+          
 
           // Reset form
           taskForm.reset();
         });
+        CookieManager.set(tasksList,String(tasks)); //create cookie for tasks
+        //TODO - make it load saved uncompleaded tasks
       }
 
       // Event form submission
