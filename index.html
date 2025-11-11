@@ -269,15 +269,21 @@
                 <form id="task-form">
                     <div class="form-group">
                         <label for="task-name">Task Name</label>
-                        <input type="text" id="task-name" required placeholder="Enter task name">
+                        <input type="text" id="task-name" required placeholder="Enter task name"required>
                     </div>
                     <div class="form-group">
                         <label for="task-priority">Priority (1-10)</label>
-                        <input type="number" id="task-priority" min="1" max="10" value="5" required>
+                        <input type="number" id="task-priority" min="1" max="10"  placeholder="5">
                     </div>
                     <div class="form-group">
                         <label for="task-duration">Duration (minutes)</label>
-                        <input type="number" id="task-duration" min="15" step="15" value="60" required>
+                        <input type="number" id="task-duration" min="15" step="15" value="60" required style="width: 40%;">
+                        <button type="button" onclick="estimateDuriation(event)" style="margin:5%">Estimate Duration</button>
+                    </div>
+                    <div class="form-group">
+                        <label for="task-location">Location </label>
+                        <input type="search" id="task-location"> 
+                        <!-- TODO - make this link to commute stuff -->
                     </div>
                     <div class="form-group">
                         <label for="task-deadline">Deadline</label>
@@ -393,10 +399,8 @@
             </ol>
             <div class="form-group">
                 <label for="google-calendar-url">Paste your .ics URL here:</label>
-                <input type="text" id="google-calendar-url" placeholder="https://calendar.google.com/calendar/ical/...@gmail.com/public/basic.ics">
-                <small style="color: #7f8c8d; display: block; margin-top: 5px;">
-                    Or just paste your calendar email (e.g., yourname@gmail.com)
-                </small>
+                <input type="text" id="google-calendar-url" placeholder="https://calendar.google.com/blah blah blah.ics">
+                
             </div>
             <div class="form-group">
                 <label for="import-date-range">Import events from:</label>
@@ -418,155 +422,7 @@
         </div>
     </div>
 
-    <script>
-        // Set default deadline to tomorrow
-        document.addEventListener('DOMContentLoaded', function() {
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            tomorrow.setHours(17, 0, 0, 0);
-            
-            const deadlineField = document.getElementById('task-deadline');
-            const eventStart = document.getElementById('event-start');
-            const eventEnd = document.getElementById('event-end');
-            
-            if (deadlineField) {
-                deadlineField.value = tomorrow.toISOString().slice(0, 16);
-            }
-            
-            if (eventStart && eventEnd) {
-                const now = new Date();
-                const hourLater = new Date();
-                hourLater.setHours(now.getHours() + 1);
-                
-                eventStart.value = now.toISOString().slice(0, 16);
-                eventEnd.value = hourLater.toISOString().slice(0, 16);
-            }
-            
-            // Set up settings form
-            const settingsForm = document.getElementById('settings-form');
-            if (settingsForm) {
-                settingsForm.addEventListener('submit', function(e) {
-                    e.preventDefault();
-                    
-                    // Get working hours
-                    const workStart = document.getElementById('work-start').value;
-                    const workEnd = document.getElementById('work-end').value;
-                    const startHour = parseInt(workStart.split(':')[0]);
-                    const endHour = parseInt(workEnd.split(':')[0]);
-                    
-                    // Get working days
-                    const workDays = [];
-                    document.querySelectorAll('input[name="workday"]:checked').forEach(el => {
-                        workDays.push(parseInt(el.value));
-                    });
-                    
-                    // Get other settings
-                    const minBreak = parseInt(document.getElementById('min-break').value);
-                    const defaultDuration = parseInt(document.getElementById('default-duration').value);
-                    
-                    // Update settings
-                    autoScheduler.settings.workingHours.start = startHour;
-                    autoScheduler.settings.workingHours.end = endHour;
-                    autoScheduler.settings.workDays = workDays;
-                    autoScheduler.settings.minBreakBetweenTasks = minBreak;
-                    autoScheduler.settings.defaultTaskDuration = defaultDuration;
-                    
-                    // Re-schedule and render
-                    autoScheduler.autoScheduleTasks();
-                    autoScheduler.renderCalendar();
-                    
-                    alert('Settings saved!');
-                });
-            }
-        });
-
-        // Tab functionality
-        function openTab(tabId) {
-            // Hide all tabs
-            const tabs = document.getElementsByClassName('tab-content');
-            for (let i = 0; i < tabs.length; i++) {
-                tabs[i].classList.remove('active');
-            }
-            
-            // Deactivate all buttons
-            const buttons = document.getElementsByClassName('tab-button');
-            for (let i = 0; i < buttons.length; i++) {
-                buttons[i].classList.remove('active');
-            }
-            
-            // Show the selected tab
-            document.getElementById(tabId).classList.add('active');
-            
-            // Activate the clicked button
-            event.currentTarget.classList.add('active');
-        }
-
-        // Export calendar data
-        function exportCalendar() {
-            const data = autoScheduler.exportData();
-            const dataStr = JSON.stringify(data);
-            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-            
-            const exportFileDefaultName = 'calendar-data.json';
-            
-            const linkElement = document.createElement('a');
-            linkElement.setAttribute('href', dataUri);
-            linkElement.setAttribute('download', exportFileDefaultName);
-            linkElement.click();
-        }
-
-        // Import calendar data
-        function importCalendar(fileInput) {
-            const file = fileInput.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    try {
-                        const data = JSON.parse(e.target.result);
-                        autoScheduler.importData(data);
-                        alert('Calendar imported successfully!');
-                    } catch (error) {
-                        alert('Error importing calendar: ' + error.message);
-                    }
-                };
-                reader.readAsText(file);
-            }
-        }
-        
-        // Google Calendar import functions
-        function showGoogleCalendarImport() {
-            document.getElementById('google-calendar-modal').style.display = 'block';
-        }
-        
-        function hideGoogleCalendarImport() {
-            document.getElementById('google-calendar-modal').style.display = 'none';
-            document.getElementById('import-status').innerHTML = '';
-        }
-        
-        async function importGoogleCalendar() {
-            const urlInput = document.getElementById('google-calendar-url').value.trim();
-            const daysRange = parseInt(document.getElementById('import-date-range').value);
-            const statusEl = document.getElementById('import-status');
-            
-            if (!urlInput) {
-                statusEl.innerHTML = '<div class="status-message status-error">Please enter a calendar URL or ID</div>';
-                return;
-            }
-            
-            statusEl.innerHTML = '<div class="status-message status-info">Importing calendar events...</div>';
-            
-            try {
-                await autoScheduler.importGoogleCalendar(urlInput, daysRange);
-                statusEl.innerHTML = '<div class="status-message status-success">Calendar imported successfully!</div>';
-                
-                setTimeout(() => {
-                    hideGoogleCalendarImport();
-                }, 2000);
-            } catch (error) {
-                statusEl.innerHTML = `<div class="status-message status-error">Error: ${error.message}</div>`;
-            }
-        }
-    </script>
+    
     <script src="script.js"></script>
 </body>
 </html>
