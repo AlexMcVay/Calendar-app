@@ -527,7 +527,6 @@ class Calendar {
     }
   }
   
-  // --- NEW HELPER FUNCTION ---
   /**
    * Helper to parse a duration string (e.g., "1-2 hours", "30 minutes", "a few minutes") into minutes
    * @param {string} durationString - The string to parse
@@ -541,46 +540,57 @@ class Calendar {
 
     // --- HANDLE VAGUE CASES ---
     if (lowerStr.includes("a few minutes") || lowerStr.includes("a minute")) {
-        return 15; // Set a minimum of 15
+        return 15;
     }
-    
-    // Ignore impractical durations for daily scheduling
     if (lowerStr.includes("month") || lowerStr.includes("year")) {
         console.warn(`Ignoring impractical duration: ${durationString}`);
-        return null; 
+        return null;
     }
-    // --- END VAGUE CASES ---
     
-    // Find numbers (can be ranges like 1-2 or 10-15)
-    const numbers = (lowerStr.match(/[\d\.]+/g) || []).map(Number);
-    if (numbers.length === 0) return null; // No numbers found
-    
-    // Take the average of the first two numbers if it's a range (e.g., "1-2 hours" -> 1.5)
-    const num = numbers.length > 1 ? (numbers[0] + numbers[1]) / 2 : numbers[0];
+    // --- NEW LOGIC ---
+    // Find hour parts, e.g., "1 hour", "1-2 hours", "1.5 hours"
+    // This regex finds number groups (including ranges) near the word "hour" or "hr"
+    const hourMatches = lowerStr.match(/([\d\.-]+)\s*(hour|hr)/g) || [];
+    hourMatches.forEach(match => {
+        // Extract the numbers from this specific match
+        const numbers = match.match(/[\d\.]+/g) || [];
+        if (numbers.length > 0) {
+            // Average if it's a range (e.g., "1-2"), otherwise just use the number
+            const num = numbers.length > 1 ? (parseFloat(numbers[0]) + parseFloat(numbers[1])) / 2 : parseFloat(numbers[0]);
+            totalMinutes += num * 60;
+        }
+    });
 
-    // Check for units
-    if (lowerStr.includes('week')) {
-        totalMinutes = num * 5 * 8 * 60; // Assume 5-day, 8-hr/day work week
-    } else if (lowerStr.includes('day')) {
-        totalMinutes = num * 8 * 60; // Assume 8-hour work day
-    } else if (lowerStr.includes('hour') || lowerStr.includes('hr')) {
-        totalMinutes = num * 60;
-    } else {
-        // Default to minutes if 'minute' or no unit is specified
-        totalMinutes = num;
+    // Find minute parts, e.g., "30 minutes", "15-20 minutes"
+    const minuteMatches = lowerStr.match(/([\d\.-]+)\s*minute/g) || [];
+    minuteMatches.forEach(match => {
+        // Extract the numbers from this specific match
+        const numbers = match.match(/[\d\.]+/g) || [];
+        if (numbers.length > 0) {
+            // Average if it's a range (e.g., "15-20"), otherwise just use the number
+            const num = numbers.length > 1 ? (parseFloat(numbers[0]) + parseFloat(numbers[1])) / 2 : parseFloat(numbers[0]);
+            totalMinutes += num;
+        }
+    });
+
+    // --- Handle cases with numbers but NO units ---
+    // If we found no hours or minutes, but the string *did* have numbers,
+    // default to assuming they were minutes (preserves old behavior for "30")
+    if (totalMinutes === 0) {
+        const numbers = (lowerStr.match(/[\d\.]+/g) || []).map(Number);
+        if (numbers.length > 0) {
+            const num = numbers.length > 1 ? (numbers[0] + numbers[1]) / 2 : numbers[0];
+            totalMinutes = num; // Assume minutes
+        }
     }
+    
+    if (totalMinutes === 0) return null; // No duration found
 
     // Round to nearest 15-minute increment, with a 15-min minimum
     const rounded = Math.max(15, Math.ceil(totalMinutes / 15) * 15);
     return rounded;
   }
-  // --- END NEW HELPER FUNCTION ---
 
-  /**
-   * Estimate task duration using Goblin.tools API
-   * @param {string} taskName - The name of the task
-   * @returns {number} Estimated duration in minutes
-   */
   /**
    * Estimate task duration using Goblin.tools API
    * @param {string} taskName - The name of the task
@@ -646,10 +656,29 @@ class Calendar {
         if (!response.ok) throw new Error(`CORS proxy error: ${response.status}`);
         
         const icsData = await response.text();
-        const events = this.parseICS(icsData);
+        const allEvents = this.parseICS(icsData); // Parse all events
+
+        // --- NEW FILTERING LOGIC ---
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Set to the very beginning of today
+
+        const futureEvents = allEvents.filter(event => {
+            // Keep event if its END time is on or after the start of today
+            if (event.end && event.end.getTime()) {
+                return event.end.getTime() >= today.getTime();
+            }
+            // Fallback: Keep event if its START time is on or after the start of today
+            // This handles events that might not have an end time parsed
+            if (event.start && event.start.getTime()) {
+                return event.start.getTime() >= today.getTime();
+            }
+            return false; // Skip if no valid end or start time
+        });
+        // --- END OF NEW LOGIC ---
         
         let addedCount = 0;
-        for (const event of events) {
+        // Loop over the new *filtered* list instead of allEvents
+        for (const event of futureEvents) { 
             const exists = this.events.some(e => 
                 e.name === event.name && e.start.getTime() === event.start.getTime()
             );
@@ -662,7 +691,8 @@ class Calendar {
         
         this.autoScheduleTasks(); // This will also save data
         this.renderCalendar();
-        showMessage(`Imported ${addedCount} new events.`);
+        // Updated message to be more informative
+        showMessage(`Imported ${addedCount} new events. (Past events were filtered)`);
         
     } catch (error) {
         console.error('Error fetching .ics file:', error);
