@@ -20,6 +20,32 @@ const showMessage = (message, type = 'success') => {
     }
 };
 
+// --- Cookie Utilities ---
+function setCookie(name, value, days) {
+    let expires = "";
+    if (days) {
+        const date = new Date();
+        date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+        expires = "; expires=" + date.toUTCString();
+    }
+    // Set SameSite=Lax for security and modern browser compatibility
+    // Use encodeURIComponent to handle special characters in JSON
+    document.cookie = name + "=" + (encodeURIComponent(value || "")) + expires + "; path=/; SameSite=Lax";
+}
+
+function getCookie(name) {
+    const nameEQ = name + "=";
+    const ca = document.cookie.split(';');
+    for(let i=0; i < ca.length; i++) {
+        let c = ca[i];
+        while (c.charAt(0) == ' ') c = c.substring(1, c.length);
+        if (c.indexOf(nameEQ) == 0) return decodeURIComponent(c.substring(nameEQ.length, c.length));
+    }
+    return null;
+}
+// --- End Cookie Utilities ---
+
+
 class Calendar {
   constructor() {
     this.events = []; // All events (fixed, task, commute)
@@ -44,9 +70,13 @@ class Calendar {
     this.getCoordinates = this.getCoordinates.bind(this);
     this.getCommuteTime = this.getCommuteTime.bind(this);
     this.estimateTaskDuration = this.estimateTaskDuration.bind(this);
+    this.saveData = this.saveData.bind(this); // <-- ADDED
+    this.loadData = this.loadData.bind(this); // <-- ADDED
     
-    // Load settings from local storage if available
+    // Load settings from cookie
     this.loadSettings();
+    // Load events and tasks from cookie
+    this.loadData(); // <-- ADDED
     
     // Initialize
     this.initCalendar();
@@ -74,7 +104,7 @@ class Calendar {
           };
           
           await this.addTask(taskData); // Await the async add
-          this.autoScheduleTasks();
+          this.autoScheduleTasks(); // This will also save data
           this.renderCalendar();
           
           taskForm.reset();
@@ -99,7 +129,7 @@ class Calendar {
           };
           
           await this.addEvent(eventData); // Await the async add
-          this.autoScheduleTasks();
+          this.autoScheduleTasks(); // This will also save data
           this.renderCalendar();
           
           eventForm.reset();
@@ -124,13 +154,13 @@ class Calendar {
     this.settings.minBreakBetweenTasks = settings.minBreak;
     this.settings.defaultTaskDuration = settings.defaultDuration;
     
-    // Save to local storage
-    localStorage.setItem('calendarSettings', JSON.stringify(this.settings));
+    // Save to cookie
+    setCookie('calendarSettings', JSON.stringify(this.settings), 365); // <-- CHANGED
     console.log('Settings saved:', this.settings);
   }
   
   loadSettings() {
-    const savedSettings = localStorage.getItem('calendarSettings');
+    const savedSettings = getCookie('calendarSettings'); // <-- CHANGED
     if (savedSettings) {
         try {
             this.settings = JSON.parse(savedSettings);
@@ -140,6 +170,56 @@ class Calendar {
         }
     }
   }
+
+  // --- NEW Data Save/Load Methods ---
+  saveData() {
+    try {
+      // Note: Cookies have size limits (e.g., 4KB). This might fail for large lists.
+      const eventsData = JSON.stringify(this.events);
+      const tasksData = JSON.stringify(this.tasks);
+      
+      setCookie('calendarEvents', eventsData, 365);
+      setCookie('calendarTasks', tasksData, 365);
+      console.log('Task and Event data saved to cookies.');
+    } catch (e) {
+      console.error('Error saving data to cookies:', e);
+      showMessage('Error saving data. Cookie size limit may be exceeded.', 'error');
+    }
+  }
+  
+  loadData() {
+    const eventsData = getCookie('calendarEvents');
+    if (eventsData) {
+        try {
+            this.events = JSON.parse(eventsData).map(e => ({
+                ...e,
+                start: new Date(e.start),
+                end: new Date(e.end)
+            }));
+            console.log('Events loaded from cookie.');
+        } catch (e) {
+            console.error('Error loading events from cookie:', e);
+            this.events = [];
+        }
+    }
+    
+    const tasksData = getCookie('calendarTasks');
+    if (tasksData) {
+        try {
+            this.tasks = JSON.parse(tasksData).map(t => ({
+                ...t,
+                deadline: new Date(t.deadline),
+                scheduledStart: t.scheduledStart ? new Date(t.scheduledStart) : null,
+                scheduledEnd: t.scheduledEnd ? new Date(t.scheduledEnd) : null,
+            }));
+            console.log('Tasks loaded from cookie.');
+        } catch (e) {
+            console.error('Error loading tasks from cookie:', e);
+            this.tasks = [];
+        }
+    }
+  }
+  // --- End Data Save/Load Methods ---
 
   // --- Core Task/Event Methods ---
 
@@ -175,6 +255,7 @@ class Calendar {
     }
     
     this.tasks.push(newTask);
+    // this.saveData(); // <-- No longer needed here, will be called by autoScheduleTasks
     console.log(`Task added: ${newTask.name}`);
     return newTask;
   }
@@ -229,6 +310,7 @@ class Calendar {
         }
     }
     
+    // this.saveData(); // <-- No longer needed here, will be called by autoScheduleTasks
     return newEvent;
   }
 
@@ -323,6 +405,7 @@ class Calendar {
         }
     });
 
+    this.saveData(); // <-- ADDED: Save all changes after scheduling
     console.log(`Scheduled ${this.tasks.filter(t => t.isScheduled).length} out of ${this.tasks.length} tasks`);
   }
 
@@ -444,48 +527,108 @@ class Calendar {
     }
   }
   
+  // --- NEW HELPER FUNCTION ---
   /**
-   * Estimate task duration using Gemini API
+   * Helper to parse a duration string (e.g., "1-2 hours", "30 minutes", "a few minutes") into minutes
+   * @param {string} durationString - The string to parse
+   * @returns {number} Estimated duration in minutes
+   */
+  parseDurationString(durationString) {
+    if (!durationString) return null;
+
+    let totalMinutes = 0;
+    const lowerStr = durationString.toLowerCase();
+
+    // --- HANDLE VAGUE CASES ---
+    if (lowerStr.includes("a few minutes") || lowerStr.includes("a minute")) {
+        return 15; // Set a minimum of 15
+    }
+    
+    // Ignore impractical durations for daily scheduling
+    if (lowerStr.includes("month") || lowerStr.includes("year")) {
+        console.warn(`Ignoring impractical duration: ${durationString}`);
+        return null; 
+    }
+    // --- END VAGUE CASES ---
+    
+    // Find numbers (can be ranges like 1-2 or 10-15)
+    const numbers = (lowerStr.match(/[\d\.]+/g) || []).map(Number);
+    if (numbers.length === 0) return null; // No numbers found
+    
+    // Take the average of the first two numbers if it's a range (e.g., "1-2 hours" -> 1.5)
+    const num = numbers.length > 1 ? (numbers[0] + numbers[1]) / 2 : numbers[0];
+
+    // Check for units
+    if (lowerStr.includes('week')) {
+        totalMinutes = num * 5 * 8 * 60; // Assume 5-day, 8-hr/day work week
+    } else if (lowerStr.includes('day')) {
+        totalMinutes = num * 8 * 60; // Assume 8-hour work day
+    } else if (lowerStr.includes('hour') || lowerStr.includes('hr')) {
+        totalMinutes = num * 60;
+    } else {
+        // Default to minutes if 'minute' or no unit is specified
+        totalMinutes = num;
+    }
+
+    // Round to nearest 15-minute increment, with a 15-min minimum
+    const rounded = Math.max(15, Math.ceil(totalMinutes / 15) * 15);
+    return rounded;
+  }
+  // --- END NEW HELPER FUNCTION ---
+
+  /**
+   * Estimate task duration using Goblin.tools API
+   * @param {string} taskName - The name of the task
+   * @returns {number} Estimated duration in minutes
+   */
+  /**
+   * Estimate task duration using Goblin.tools API
    * @param {string} taskName - The name of the task
    * @returns {number} Estimated duration in minutes
    */
   async estimateTaskDuration(taskName) {
-    const apiKey = ""; // API key is handled by the environment
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+    const apiUrl = "https://goblin.tools/api/Estimator";
     
-    const systemPrompt = "You are a task duration estimator. A user will provide a task name. Respond ONLY with the estimated time in minutes. Do not add 'minutes' or any other text. Just the number. If the task is ambiguous, provide a reasonable average. Example: 'Write blog post' -> '120'. 'Email client' -> '15'.";
+    const raw = JSON.stringify({
+      "Text": taskName,
+      "Ancestors": [],
+      "Spiciness": 2, // A neutral "spiciness" level
+      "Exact": true,
+    });
     
-    const payload = {
-        contents: [{ parts: [{ text: taskName }] }],
-        systemInstruction: {
-            parts: [{ text: systemPrompt }]
-        },
+    const requestOptions = {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: raw,
+      redirect: "follow"
     };
 
     try {
-        const response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
+        const response = await fetch(apiUrl, requestOptions);
 
         if (!response.ok) {
-            throw new Error(`Gemini API error: ${response.status} ${response.statusText}`);
+            throw new Error(`Goblin API error: ${response.status} ${response.statusText}`);
         }
         
-        const result = await response.json();
-        const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+        // --- THIS IS THE FIX ---
+        // The API returns plain text, not JSON
+        const durationString = await response.text(); 
+        // We remove the quotes that the API adds, e.g., "about 1-2 hours" -> about 1-2 hours
+        const cleanedString = durationString.replace(/"/g, ''); 
         
-        if (text) {
-            const duration = parseInt(text.trim());
-            if (!isNaN(duration)) {
+        if (cleanedString) {
+            const duration = this.parseDurationString(cleanedString);
+            if (duration) {
                 return duration;
             }
         }
+        // --- END OF FIX ---
+
         throw new Error('Could not parse duration from API response.');
         
     } catch (error) {
         console.error('estimateTaskDuration error:', error);
+        // This will catch network errors and potential CORS errors
         showMessage(error.message, 'error');
         return null;
     }
@@ -517,7 +660,7 @@ class Calendar {
             }
         }
         
-        this.autoScheduleTasks();
+        this.autoScheduleTasks(); // This will also save data
         this.renderCalendar();
         showMessage(`Imported ${addedCount} new events.`);
         
@@ -694,6 +837,7 @@ class Calendar {
     if (data.settings) this.settings = data.settings;
     
     this.renderCalendar();
+    this.saveData(); // <-- ADDED: Save imported data
   }
 }
 
