@@ -258,9 +258,9 @@
     <div class="container">
         <div class="sidebar">
             <div class="tab-buttons">
-                <button class="tab-button active" onclick="openTab('tasks-tab')">Tasks</button>
-                <button class="tab-button" onclick="openTab('events-tab')">Events</button>
-                <button class="tab-button" onclick="openTab('settings-tab')">Settings</button>
+                <button class="tab-button active" onclick="openTab(event, 'tasks-tab')">Tasks</button>
+                <button class="tab-button" onclick="openTab(event, 'events-tab')">Events</button>
+                <button class="tab-button" onclick="openTab(event, 'settings-tab')">Settings</button>
             </div>
 
             <!-- Tasks Tab -->
@@ -373,8 +373,8 @@
                 <button onclick="autoScheduler.autoScheduleTasks(); autoScheduler.renderCalendar();">Re-Schedule All Tasks</button>
                 <button onclick="exportCalendar()" style="margin-top: 10px;">Export Calendar</button>
                 <input type="file" id="import-file" style="display: none;" onchange="importCalendar(this)">
-                <button onclick="document.getElementById('import-file').click()" style="margin-top: 10px;">Import Calendar</button>
-                <button onclick="showGoogleCalendarImport()" style="margin-top: 10px; background-color: #9b59b6;">Import Google Calendar</button>
+                <button onclick="document.getElementById('import-file').click()">Import JSON</button>
+                <button onclick="showGoogleCalendarImport()" style="margin-top: 05px; ">Import Google Calendar</button>
             </div>
         </div>
 

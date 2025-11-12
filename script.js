@@ -123,7 +123,7 @@ class Calendar {
           // Reset form
           taskForm.reset();
         });
-        CookieManager.set(tasksList,String(tasks)); //create cookie for tasks
+        // CookieManager.set(tasksList,String(tasks)); //create cookie for tasks
         //TODO - make it load saved uncompleaded tasks
       }
 
