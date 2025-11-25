@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Auto-Scheduling Calendar</title>
+    <!-- <script src="script.js" defer></script>  <-- REMOVED FROM HERE -->
     <style>
         
         body {
@@ -71,6 +72,7 @@
             border: 1px solid #ddd;
             border-radius: 4px;
             font-size: 16px;
+            box-sizing: border-box; /* Added for consistent sizing */
         }
 
         button {
@@ -86,6 +88,11 @@
 
         button:hover {
             background-color: #2980b9;
+        }
+        
+        button:disabled {
+            background-color: #bdc3c7;
+            cursor: not-allowed;
         }
 
         .events-list, .unscheduled-tasks {
@@ -106,6 +113,12 @@
         .fixed-event {
             background-color: #e8f4f8;
             border-left: 4px solid #3498db;
+        }
+        
+        /* New Style for Commute Events */
+        .commute-event {
+            background-color: #fdf3e7;
+            border-left: 4px solid #f39c12;
         }
 
         .task-event {
@@ -138,6 +151,12 @@
             padding: 3px 8px;
             border-radius: 12px;
             font-size: 12px;
+            margin-left: 5px;
+        }
+        
+        /* New Style for Commute Badge */
+        .commute-badge {
+            background-color: #f39c12;
         }
         
         .imported-badge {
@@ -206,6 +225,58 @@
             margin-right: 5px;
         }
         
+        /* Input group for estimate button */
+        .input-group {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .input-group input {
+            flex-grow: 1;
+        }
+        
+        .input-group button {
+            flex-shrink: 0;
+            font-size: 12px;
+            padding: 8px;
+        }
+        
+        /* Loading spinner */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: none; /* Hidden by default */
+            margin: 10px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Message Area */
+        #message-area {
+            font-size: 14px;
+            padding: 10px;
+            border-radius: 4px;
+            display: none;
+            margin-top: 15px;
+        }
+        #message-area.success {
+            background-color: #eafaf1;
+            color: #2ecc71;
+            display: block;
+        }
+        #message-area.error {
+            background-color: #fbeae9;
+            color: #e74c3c;
+            display: block;
+        }
+        
         .modal {
             display: none;
             position: fixed;
@@ -247,13 +318,15 @@
             color: #0c5460;
         }
     </style>
-    <script src="script.js" defer></script>
 </head>
 <body>
     <header>
         <h1>Auto-Scheduling Calendar</h1>
         <p>Automatically schedule your tasks based on priority and deadlines</p>
     </header>
+
+    <div id="loading-spinner" class="loader"></div>
+    <div id="message-area"></div>
 
     <div class="container">
         <div class="sidebar">
@@ -269,6 +342,10 @@
                 <form id="task-form">
                     <div class="form-group">
                         <label for="task-name">Task Name</label>
+                        <div class="input-group">
+                            <input type="text" id="task-name" required placeholder="Enter task name">
+                            <button type="button" id="estimate-duration-btn" onclick="estimateDuration()">Estimate</button>
+                        </div>
                         <input type="text" id="task-name" required placeholder="Enter task name"required>
                     </div>
                     <div class="form-group">
@@ -288,6 +365,10 @@
                     <div class="form-group">
                         <label for="task-deadline">Deadline</label>
                         <input type="datetime-local" id="task-deadline" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="task-location">Location (optional)</label>
+                        <input type="text" id="task-location" placeholder="Enter an address">
                     </div>
                     <button type="submit">Add Task</button>
                 </form>
@@ -309,6 +390,10 @@
                         <label for="event-end">End Time</label>
                         <input type="datetime-local" id="event-end" required>
                     </div>
+                    <div class="form-group">
+                        <label for="event-location">Location (optional)</label>
+                        <input type="text" id="event-location" placeholder="Enter an address">
+                    </div>
                     <button type="submit">Add Event</button>
                 </form>
             </div>
@@ -317,6 +402,17 @@
             <div id="settings-tab" class="tab-content">
                 <h2>Calendar Settings</h2>
                 <form id="settings-form">
+
+                    <div class="form-group">
+                        <label for="ors-api-key">OpenRouteService API Key</label>
+                        <input type="text" id="ors-api-key" placeholder="Get your free API key from openrouteservice.org">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="home-address">Home Address</label>
+                        <input type="text" id="home-address" placeholder="e.g., 1600 Amphitheatre Pkwy, Mountain View, CA">
+                    </div>
+                    
                     <div class="form-group">
                         <label>Working Hours</label>
                         <div class="settings-row">
@@ -333,27 +429,13 @@
                     <div class="form-group">
                         <label>Working Days</label>
                         <div class="checkbox-group">
-                            <label>
-                                <input type="checkbox" name="workday" value="0"> Sun
-                            </label>
-                            <label>
-                                <input type="checkbox" name="workday" value="1" checked> Mon
-                            </label>
-                            <label>
-                                <input type="checkbox" name="workday" value="2" checked> Tue
-                            </label>
-                            <label>
-                                <input type="checkbox" name="workday" value="3" checked> Wed
-                            </label>
-                            <label>
-                                <input type="checkbox" name="workday" value="4" checked> Thu
-                            </label>
-                            <label>
-                                <input type="checkbox" name="workday" value="5" checked> Fri
-                            </label>
-                            <label>
-                                <input type="checkbox" name="workday" value="6"> Sat
-                            </label>
+                            <label><input type="checkbox" name="workday" value="0"> Sun</label>
+                            <label><input type="checkbox" name="workday" value="1" checked> Mon</label>
+                            <label><input type="checkbox" name="workday" value="2" checked> Tue</label>
+                            <label><input type="checkbox" name="workday" value="3" checked> Wed</label>
+                            <label><input type="checkbox" name="workday" value="4" checked> Thu</label>
+                            <label><input type="checkbox" name="workday" value="5" checked> Fri</label>
+                            <label><input type="checkbox" name="workday" value="6"> Sat</label>
                         </div>
                     </div>
                     <div class="form-group">
@@ -376,6 +458,15 @@
                 <button onclick="document.getElementById('import-file').click()" style="margin-top: 10px;">Import Calendar</button>
                 <button onclick="showGoogleCalendarImport()" style="margin-top: 10px; background-color: #9b59b6;">Import Google Calendar</button>
             </div>
+            
+            <div style="margin-top: 20px;">
+                <h3>Import from URL</h3>
+                <div class="form-group">
+                    <label for="ics-url">Public .ics URL</label>
+                    <input type="text" id="ics-url" placeholder="https://..." style="width: 100%;">
+                </div>
+                <button onclick="importFromICS()">Import from .ics</button>
+            </div>
         </div>
 
         <div class="main-content">
@@ -385,6 +476,162 @@
             </div>
         </div>
     </div>
+
+    <!-- Load Calendar Script FIRST so autoScheduler is defined -->
+    <script src="script.js"></script>
+    
+    <!-- Main Script Block -->
+    <script>
+        // Utility function to show/hide loader
+        // const loader = document.getElementById('loading-spinner'); // Now defined in script.js
+        // const showLoader = (show) => { ... }; // Now defined in script.js
+        
+        // Utility function to show messages
+        // const messageArea = document.getElementById('message-area'); // Now defined in script.js
+        // const showMessage = (message, type = 'success') => { ... }; // Now defined in script.js
+        
+        // --- Event Listeners and UI Functions ---
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set default deadline to tomorrow
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            tomorrow.setHours(17, 0, 0, 0);
+            
+            const deadlineField = document.getElementById('task-deadline');
+            const eventStart = document.getElementById('event-start');
+            const eventEnd = document.getElementById('event-end');
+            
+            if (deadlineField) {
+                deadlineField.value = tomorrow.toISOString().slice(0, 16);
+            }
+            
+            if (eventStart && eventEnd) {
+                const now = new Date();
+                const hourLater = new Date();
+                hourLater.setHours(now.getHours() + 1);
+                
+                eventStart.value = now.toISOString().slice(0, 16);
+                eventEnd.value = hourLater.toISOString().slice(0, 16);
+            }
+            
+            // Re-bind the settings form listener to our class method
+            const settingsForm = document.getElementById('settings-form');
+            if (settingsForm) {
+                settingsForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    const settings = {
+                        orsApiKey: document.getElementById('ors-api-key').value,
+                        homeAddress: document.getElementById('home-address').value,
+                        workStart: document.getElementById('work-start').value,
+                        workEnd: document.getElementById('work-end').value,
+                        workDays: Array.from(document.querySelectorAll('input[name="workday"]:checked')).map(el => parseInt(el.value)),
+                        minBreak: parseInt(document.getElementById('min-break').value),
+                        defaultDuration: parseInt(document.getElementById('default-duration').value)
+                    };
+                    
+                    autoScheduler.saveSettings(settings);
+                    showMessage('Settings saved!');
+                });
+            }
+            
+            // Load settings into the form
+             const currentSettings = autoScheduler.settings;
+             document.getElementById('ors-api-key').value = currentSettings.orsApiKey || '';
+             document.getElementById('home-address').value = currentSettings.homeAddress || '';
+             document.getElementById('work-start').value = String(currentSettings.workingHours.start).padStart(2, '0') + ':00';
+             document.getElementById('work-end').value = String(currentSettings.workingHours.end).padStart(2, '0') + ':00';
+             document.getElementById('min-break').value = currentSettings.minBreakBetweenTasks;
+             document.getElementById('default-duration').value = currentSettings.defaultTaskDuration;
+             document.querySelectorAll('input[name="workday"]').forEach(el => {
+                 el.checked = currentSettings.workDays.includes(parseInt(el.value));
+             });
+        });
+
+        // Tab functionality
+        function openTab(tabId) {
+            const tabs = document.getElementsByClassName('tab-content');
+            for (let i = 0; i < tabs.length; i++) {
+                tabs[i].classList.remove('active');
+            }
+            const buttons = document.getElementsByClassName('tab-button');
+            for (let i = 0; i < buttons.length; i++) {
+                buttons[i].classList.remove('active');
+            }
+            document.getElementById(tabId).classList.add('active');
+            event.currentTarget.classList.add('active');
+        }
+
+        // Export/Import Functions
+        function exportCalendar() {
+            const data = autoScheduler.exportData();
+            const dataStr = JSON.stringify(data);
+            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+            const exportFileDefaultName = 'calendar-data.json';
+            const linkElement = document.createElement('a');
+            linkElement.setAttribute('href', dataUri);
+            linkElement.setAttribute('download', exportFileDefaultName);
+            linkElement.click();
+        }
+
+        function importCalendar(fileInput) {
+            const file = fileInput.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const data = JSON.parse(e.target.result);
+                        autoScheduler.importData(data);
+                        showMessage('Calendar imported successfully!');
+                    } catch (error) {
+                        showMessage('Error importing calendar: ' + error.message, 'error');
+                    }
+                };
+                reader.readAsText(file);
+            }
+        }
+        
+        function importFromICS() {
+            const url = document.getElementById('ics-url').value;
+            if (url) {
+                autoScheduler.fetchICS(url); // This now shows its own messages
+            } else {
+                showMessage('Please enter a .ics URL.', 'error');
+            }
+        }
+        
+        // --- New Function for Task Estimation ---
+        async function estimateDuration() {
+            const taskName = document.getElementById('task-name').value;
+            if (!taskName) {
+                showMessage('Please enter a task name to estimate.', 'error');
+                return;
+            }
+            
+            const estimateBtn = document.getElementById('estimate-duration-btn');
+            estimateBtn.disabled = true;
+            estimateBtn.textContent = '...';
+            
+            try {
+                const duration = await autoScheduler.estimateTaskDuration(taskName);
+                if (duration) {
+                    document.getElementById('task-duration').value = duration;
+                    showMessage(`Estimated duration set to ${duration} minutes.`);
+                } else {
+                    showMessage('Could not estimate duration.', 'error');
+                }
+            } catch (error) {
+                showMessage(`Estimation error: ${error.message}`, 'error');
+            } finally {
+                estimateBtn.disabled = false;
+                estimateBtn.textContent = 'Estimate';
+            }
+        }
+    </script>
+    
+    <!-- Load Calendar Script -->
+    <!-- <script src="script.js"></script> <-- MOVED TO TOP OF SCRIPT BLOCKS -->
     
     <!-- Google Calendar Import Modal -->
     <div id="google-calendar-modal" class="modal">
