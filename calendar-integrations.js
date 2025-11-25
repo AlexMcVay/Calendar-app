@@ -138,11 +138,18 @@ class CalendarIntegrations {
         redirect: "follow"
       };
 
-      const response = await fetch("https://goblin.tools/api/Estimator", requestOptions);
+      // CHANGED: Use api/ToDo instead of api/Estimator to get subtasks instead of time estimates
+      const response = await fetch("https://goblin.tools/api/ToDo", requestOptions);
       const result = await response.text();
       
       console.log('Task breakdown result:', result);
-      return JSON.parse(result);
+      
+      // Try to parse as JSON, but fallback to raw text if it fails
+      try {
+        return JSON.parse(result);
+      } catch (e) {
+        return result;
+      }
       
     } catch (error) {
       console.error('Error breaking down task:', error);
