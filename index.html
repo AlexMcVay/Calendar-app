@@ -4,7 +4,250 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Auto-Scheduling Calendar</title>
-    <link rel="stylesheet" href="style.css">
+    <style>
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f7fa;
+        }
+
+        h1, h2, h3 {
+            color: #2c3e50;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 10px;
+        }
+
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .sidebar {
+            flex: 1;
+            min-width: 300px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+
+        .main-content {
+            flex: 2;
+            min-width: 500px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+
+        form {
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #2980b9;
+        }
+
+        .events-list, .unscheduled-tasks {
+            list-style: none;
+            padding: 0;
+        }
+
+        .events-list li, .unscheduled-tasks li {
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .fixed-event {
+            background-color: #e8f4f8;
+            border-left: 4px solid #3498db;
+        }
+
+        .task-event {
+            background-color: #eafaf1;
+            border-left: 4px solid #2ecc71;
+        }
+
+        .unscheduled-tasks li {
+            background-color: #fef9e7;
+            border-left: 4px solid #f1c40f;
+        }
+        
+        .imported-event {
+            background-color: #f4e8f8;
+            border-left: 4px solid #9b59b6;
+        }
+
+        .event-time {
+            font-weight: 500;
+            margin-right: 10px;
+        }
+
+        .event-name {
+            flex-grow: 1;
+        }
+
+        .event-badge {
+            background-color: #2ecc71;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+        
+        .imported-badge {
+            background-color: #9b59b6;
+        }
+
+        .task-details {
+            font-size: 14px;
+            color: #7f8c8d;
+            width: 100%;
+            margin-top: 5px;
+        }
+
+        .tab-buttons {
+            display: flex;
+            margin-bottom: 20px;
+        }
+
+        .tab-button {
+            padding: 10px 20px;
+            background-color: #eee;
+            border: none;
+            margin-right: 5px;
+            cursor: pointer;
+        }
+
+        .tab-button.active {
+            background-color: #3498db;
+            color: white;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .settings-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .settings-row label {
+            margin-bottom: 0;
+            display: flex;
+            align-items: center;
+        }
+
+        .checkbox-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .checkbox-group label {
+            display: flex;
+            align-items: center;
+            margin-right: 10px;
+        }
+
+        .checkbox-group input {
+            width: auto;
+            margin-right: 5px;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+        }
+        
+        .modal-content {
+            background: white;
+            margin: 50px auto;
+            padding: 30px;
+            max-width: 600px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        }
+        
+        .status-message {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        
+        .status-success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .status-error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        
+        .status-info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+    </style>
+    <script src="script.js" defer></script>
 </head>
 <body>
     <header>
@@ -17,36 +260,40 @@
             <div class="tab-buttons">
                 <button class="tab-button active" onclick="openTab('tasks-tab')">Tasks</button>
                 <button class="tab-button" onclick="openTab('events-tab')">Events</button>
-                <button class="tab-button" onclick="openTab('integrations-tab')">Integrations</button>
                 <button class="tab-button" onclick="openTab('settings-tab')">Settings</button>
             </div>
 
+            <!-- Tasks Tab -->
             <div id="tasks-tab" class="tab-content active">
                 <h2>Add New Task</h2>
                 <form id="task-form">
                     <div class="form-group">
                         <label for="task-name">Task Name</label>
-                        <input type="text" id="task-name" required placeholder="Enter task name">
+                        <input type="text" id="task-name" required placeholder="Enter task name"required>
                     </div>
                     <div class="form-group">
                         <label for="task-priority">Priority (1-10)</label>
-                        <input type="number" id="task-priority" min="1" max="10" value="5" required>
+                        <input type="number" id="task-priority" min="1" max="10"  placeholder="5">
                     </div>
                     <div class="form-group">
                         <label for="task-duration">Duration (minutes)</label>
-                        <input type="number" id="task-duration" min="15" step="15" value="60" required>
+                        <input type="number" id="task-duration" min="15" step="15" value="60" required style="width: 40%;">
+                        <button type="button" onclick="estimateDuriation(event)" style="margin:5%">Estimate Duration</button>
+                    </div>
+                    <div class="form-group">
+                        <label for="task-location">Location </label>
+                        <input type="search" id="task-location"> 
+                        <!-- TODO - make this link to commute stuff -->
                     </div>
                     <div class="form-group">
                         <label for="task-deadline">Deadline</label>
                         <input type="datetime-local" id="task-deadline" required>
                     </div>
                     <button type="submit">Add Task</button>
-                    <button type="button" onclick="breakdownCurrentTask()" style="margin-left: 10px; background-color: #9b59b6;">
-                        Breakdown Task
-                    </button>
                 </form>
             </div>
 
+            <!-- Events Tab -->
             <div id="events-tab" class="tab-content">
                 <h2>Add Fixed Event</h2>
                 <form id="event-form">
@@ -66,33 +313,7 @@
                 </form>
             </div>
 
-            <div id="integrations-tab" class="tab-content">
-                <h2>Calendar Integrations</h2>
-                
-                <div class="integration-section">
-                    <h3>Google Calendar Import</h3>
-                    <p style="font-size: 14px; color: #666;">Import events from your Google Calendar using the iCal URL</p>
-                    <div class="form-group">
-                        <label for="gcal-url">Google Calendar iCal URL</label>
-                        <input type="text" id="gcal-url" placeholder="https://calendar.google.com/calendar/ical/...">
-                        <small style="color: #666;">Get this from Google Calendar Settings > Integrate Calendar > Secret address in iCal format</small>
-                    </div>
-                    <button onclick="importFromGoogleCalendar()" style="background-color: #e74c3c;">
-                        Import Google Calendar
-                    </button>
-                </div>
-
-                <div class="integration-section" style="margin-top: 30px;">
-                    <h3>Task Breakdown Settings</h3>
-                    <p style="font-size: 14px; color: #666;">Configure how tasks are broken down into subtasks</p>
-                    <div class="form-group">
-                        <label for="breakdown-spiciness">Detail Level (1-5)</label>
-                        <input type="number" id="breakdown-spiciness" min="1" max="5" value="2">
-                        <small style="color: #666;">1 = High-level steps, 5 = Very detailed subtasks</small>
-                    </div>
-                </div>
-            </div>
-
+            <!-- Settings Tab -->
             <div id="settings-tab" class="tab-content">
                 <h2>Calendar Settings</h2>
                 <form id="settings-form">
@@ -153,242 +374,55 @@
                 <button onclick="exportCalendar()" style="margin-top: 10px;">Export Calendar</button>
                 <input type="file" id="import-file" style="display: none;" onchange="importCalendar(this)">
                 <button onclick="document.getElementById('import-file').click()" style="margin-top: 10px;">Import Calendar</button>
+                <button onclick="showGoogleCalendarImport()" style="margin-top: 10px; background-color: #9b59b6;">Import Google Calendar</button>
             </div>
         </div>
 
         <div class="main-content">
             <h2>Your Schedule</h2>
             <div id="calendar">
-                </div>
+                <!-- Calendar will be rendered here -->
+            </div>
+        </div>
+    </div>
+    
+    <!-- Google Calendar Import Modal -->
+    <div id="google-calendar-modal" class="modal">
+        <div class="modal-content">
+            <h3>Import Google Calendar</h3>
+            <p><strong>Step 1:</strong> Get your calendar's .ics URL from Google Calendar:</p>
+            <ol style="font-size: 14px; margin: 10px 0; padding-left: 20px;">
+                <li>Open <a href="https://calendar.google.com" target="_blank">Google Calendar</a></li>
+                <li>Go to Settings → Settings for my calendars → [Your Calendar]</li>
+                <li>Scroll to "Integrate calendar"</li>
+                <li>Copy the "Public URL to this calendar" (.ics format)</li>
+            </ol>
+            <div class="form-group">
+                <label for="google-calendar-url">Paste your .ics URL here:</label>
+                <input type="text" id="google-calendar-url" placeholder="https://calendar.google.com/blah blah blah.ics">
+                
+            </div>
+            <div class="form-group">
+                <label for="import-date-range">Import events from:</label>
+                <select id="import-date-range">
+                    <option value="7">Next 7 days</option>
+                    <option value="14" selected>Next 14 days</option>
+                    <option value="30">Next 30 days</option>
+                    <option value="90">Next 90 days</option>
+                </select>
+            </div>
+            <div style="background: #fff3cd; border: 1px solid #ffc107; padding: 10px; border-radius: 4px; margin: 15px 0; font-size: 14px;">
+                ⚠️ <strong>Important:</strong> Your calendar must be set to <strong>public</strong> for this to work.
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button onclick="importGoogleCalendar()">Import</button>
+                <button onclick="hideGoogleCalendarImport()" style="background-color: #95a5a6;">Cancel</button>
+            </div>
+            <div id="import-status"></div>
         </div>
     </div>
 
+    
     <script src="script.js"></script>
-    <script src="calendar-integrations.js"></script>
-    <script>
-        // Global integrations variable
-        let integrations = null;
-        
-        // Initialize integrations after DOM and autoScheduler are ready
-        function initializeIntegrations() {
-            if (typeof autoScheduler !== 'undefined' && typeof CalendarIntegrations !== 'undefined') {
-                integrations = new CalendarIntegrations(autoScheduler);
-                
-                // IMPORTANT: Connect the integrations back to the scheduler
-                // This allows the scheduler to call getEstimate() automatically
-                if (typeof autoScheduler.setIntegrations === 'function') {
-                    autoScheduler.setIntegrations(integrations);
-                }
-                
-                console.log('Calendar integrations initialized and connected');
-                return true;
-            }
-            return false;
-        }
-
-        // Tab functionality
-        function openTab(tabId) {
-            const tabs = document.getElementsByClassName('tab-content');
-            for (let i = 0; i < tabs.length; i++) {
-                tabs[i].classList.remove('active');
-            }
-            
-            const buttons = document.getElementsByClassName('tab-button');
-            for (let i = 0; i < buttons.length; i++) {
-                buttons[i].classList.remove('active');
-            }
-            
-            document.getElementById(tabId).classList.add('active');
-            // Check if event is defined (it might not be if called programmatically)
-            if (typeof event !== 'undefined' && event.currentTarget) {
-                event.currentTarget.classList.add('active');
-            }
-        }
-
-        // Import from Google Calendar
-        async function importFromGoogleCalendar() {
-            if (!integrations) {
-                if (!initializeIntegrations()) {
-                    alert('Integration system not ready. Please refresh the page and try again.');
-                    return;
-                }
-            }
-
-            const urlInput = document.getElementById('gcal-url');
-            const calendarUrl = urlInput.value.trim();
-            
-            if (!calendarUrl) {
-                alert('Please enter a Google Calendar iCal URL');
-                return;
-            }
-            
-            try {
-                // Change button text to indicate loading
-                const btn = document.querySelector('button[onclick="importFromGoogleCalendar()"]');
-                const originalText = btn.innerText;
-                btn.innerText = "Importing...";
-                btn.disabled = true;
-
-                await integrations.importGoogleCalendar(calendarUrl);
-                autoScheduler.autoScheduleTasks();
-                autoScheduler.renderCalendar();
-                alert('Google Calendar imported successfully!');
-                
-                // Reset button
-                btn.innerText = originalText;
-                btn.disabled = false;
-            } catch (error) {
-                console.error('Import error:', error);
-                alert('Error importing Google Calendar: ' + error.message);
-                
-                // Reset button on error too
-                const btn = document.querySelector('button[onclick="importFromGoogleCalendar()"]');
-                if (btn) {
-                    btn.innerText = "Import Google Calendar";
-                    btn.disabled = false;
-                }
-            }
-        }
-
-        // Breakdown current task
-        async function breakdownCurrentTask() {
-            if (!integrations) {
-                if (!initializeIntegrations()) {
-                    alert('Integration system not ready. Please refresh the page and try again.');
-                    return;
-                }
-            }
-
-            const taskName = document.getElementById('task-name').value;
-            const taskPriority = parseInt(document.getElementById('task-priority').value);
-            const taskDuration = parseInt(document.getElementById('task-duration').value);
-            const taskDeadline = document.getElementById('task-deadline').value;
-            const spiciness = parseInt(document.getElementById('breakdown-spiciness')?.value || 2);
-            
-            if (!taskName) {
-                alert('Please enter a task name first');
-                return;
-            }
-            
-            try {
-                // Note: with the Estimator tool now active, this might behave differently 
-                // depending on how you implemented breakdownAndAddTask in the integrations file.
-                await integrations.breakdownAndAddTask(
-                    taskName,
-                    {
-                        priority: taskPriority,
-                        duration: taskDuration,
-                        deadline: new Date(taskDeadline)
-                    },
-                    spiciness
-                );
-                
-                autoScheduler.autoScheduleTasks();
-                autoScheduler.renderCalendar();
-                
-                // Clear the form
-                document.getElementById('task-form').reset();
-                
-                alert('Task processed successfully!');
-            } catch (error) {
-                console.error('Breakdown error:', error);
-                alert('Error processing task: ' + error.message);
-            }
-        }
-
-        // Export calendar data
-        function exportCalendar() {
-            const data = autoScheduler.exportData();
-            const dataStr = JSON.stringify(data);
-            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-            
-            const exportFileDefaultName = 'calendar-data.json';
-            
-            const linkElement = document.createElement('a');
-            linkElement.setAttribute('href', dataUri);
-            linkElement.setAttribute('download', exportFileDefaultName);
-            linkElement.click();
-        }
-
-        // Import calendar data
-        function importCalendar(fileInput) {
-            const file = fileInput.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    try {
-                        const data = JSON.parse(e.target.result);
-                        autoScheduler.importData(data);
-                        alert('Calendar imported successfully!');
-                    } catch (error) {
-                        alert('Error importing calendar: ' + error.message);
-                    }
-                };
-                reader.readAsText(file);
-            }
-        }
-
-        // Initialize everything when DOM is ready
-        document.addEventListener('DOMContentLoaded', function() {
-            // Set default deadline to tomorrow
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            tomorrow.setHours(17, 0, 0, 0);
-            
-            const deadlineField = document.getElementById('task-deadline');
-            const eventStart = document.getElementById('event-start');
-            const eventEnd = document.getElementById('event-end');
-            
-            if (deadlineField) {
-                deadlineField.value = tomorrow.toISOString().slice(0, 16);
-            }
-            
-            if (eventStart && eventEnd) {
-                const now = new Date();
-                const hourLater = new Date();
-                hourLater.setHours(now.getHours() + 1);
-                
-                eventStart.value = now.toISOString().slice(0, 16);
-                eventEnd.value = hourLater.toISOString().slice(0, 16);
-            }
-            
-            // Set up settings form
-            const settingsForm = document.getElementById('settings-form');
-            if (settingsForm) {
-                settingsForm.addEventListener('submit', function(e) {
-                    e.preventDefault();
-                    
-                    const workStart = document.getElementById('work-start').value;
-                    const workEnd = document.getElementById('work-end').value;
-                    const startHour = parseInt(workStart.split(':')[0]);
-                    const endHour = parseInt(workEnd.split(':')[0]);
-                    
-                    const workDays = [];
-                    document.querySelectorAll('input[name="workday"]:checked').forEach(el => {
-                        workDays.push(parseInt(el.value));
-                    });
-                    
-                    const minBreak = parseInt(document.getElementById('min-break').value);
-                    const defaultDuration = parseInt(document.getElementById('default-duration').value);
-                    
-                    autoScheduler.settings.workingHours.start = startHour;
-                    autoScheduler.settings.workingHours.end = endHour;
-                    autoScheduler.settings.workDays = workDays;
-                    autoScheduler.settings.minBreakBetweenTasks = minBreak;
-                    autoScheduler.settings.defaultTaskDuration = defaultDuration;
-                    
-                    autoScheduler.autoScheduleTasks();
-                    autoScheduler.renderCalendar();
-                    
-                    alert('Settings saved!');
-                });
-            }
-
-            // Initialize integrations after a short delay to ensure autoScheduler is ready
-            setTimeout(() => {
-                initializeIntegrations();
-            }, 500);
-        });
-    </script>
 </body>
 </html>
