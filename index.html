@@ -171,68 +171,18 @@
     <script src="script.js"></script>
     <script src="calendar-integrations.js"></script>
     <script>
-        // Initialize integrations
-        let integrations;
+        // Global integrations variable
+        let integrations = null;
         
-        document.addEventListener('DOMContentLoaded', function() {
-            // Wait for autoScheduler to be initialized
-            setTimeout(() => {
+        // Initialize integrations after DOM and autoScheduler are ready
+        function initializeIntegrations() {
+            if (typeof autoScheduler !== 'undefined' && typeof CalendarIntegrations !== 'undefined') {
                 integrations = new CalendarIntegrations(autoScheduler);
-                console.log('Calendar integrations initialized');
-            }, 100);
-            
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            tomorrow.setHours(17, 0, 0, 0);
-            
-            const deadlineField = document.getElementById('task-deadline');
-            const eventStart = document.getElementById('event-start');
-            const eventEnd = document.getElementById('event-end');
-            
-            if (deadlineField) {
-                deadlineField.value = tomorrow.toISOString().slice(0, 16);
+                console.log('Calendar integrations initialized successfully');
+                return true;
             }
-            
-            if (eventStart && eventEnd) {
-                const now = new Date();
-                const hourLater = new Date();
-                hourLater.setHours(now.getHours() + 1);
-                
-                eventStart.value = now.toISOString().slice(0, 16);
-                eventEnd.value = hourLater.toISOString().slice(0, 16);
-            }
-            
-            const settingsForm = document.getElementById('settings-form');
-            if (settingsForm) {
-                settingsForm.addEventListener('submit', function(e) {
-                    e.preventDefault();
-                    
-                    const workStart = document.getElementById('work-start').value;
-                    const workEnd = document.getElementById('work-end').value;
-                    const startHour = parseInt(workStart.split(':')[0]);
-                    const endHour = parseInt(workEnd.split(':')[0]);
-                    
-                    const workDays = [];
-                    document.querySelectorAll('input[name="workday"]:checked').forEach(el => {
-                        workDays.push(parseInt(el.value));
-                    });
-                    
-                    const minBreak = parseInt(document.getElementById('min-break').value);
-                    const defaultDuration = parseInt(document.getElementById('default-duration').value);
-                    
-                    autoScheduler.settings.workingHours.start = startHour;
-                    autoScheduler.settings.workingHours.end = endHour;
-                    autoScheduler.settings.workDays = workDays;
-                    autoScheduler.settings.minBreakBetweenTasks = minBreak;
-                    autoScheduler.settings.defaultTaskDuration = defaultDuration;
-                    
-                    autoScheduler.autoScheduleTasks();
-                    autoScheduler.renderCalendar();
-                    
-                    alert('Settings saved!');
-                });
-            }
-        });
+            return false;
+        }
 
         // Tab functionality
         function openTab(tabId) {
@@ -252,6 +202,13 @@
 
         // Import from Google Calendar
         async function importFromGoogleCalendar() {
+            if (!integrations) {
+                if (!initializeIntegrations()) {
+                    alert('Integration system not ready. Please refresh the page and try again.');
+                    return;
+                }
+            }
+
             const urlInput = document.getElementById('gcal-url');
             const calendarUrl = urlInput.value.trim();
             
@@ -266,12 +223,20 @@
                 autoScheduler.renderCalendar();
                 alert('Google Calendar imported successfully!');
             } catch (error) {
+                console.error('Import error:', error);
                 alert('Error importing Google Calendar: ' + error.message);
             }
         }
 
         // Breakdown current task
         async function breakdownCurrentTask() {
+            if (!integrations) {
+                if (!initializeIntegrations()) {
+                    alert('Integration system not ready. Please refresh the page and try again.');
+                    return;
+                }
+            }
+
             const taskName = document.getElementById('task-name').value;
             const taskPriority = parseInt(document.getElementById('task-priority').value);
             const taskDuration = parseInt(document.getElementById('task-duration').value);
@@ -302,6 +267,7 @@
                 
                 alert('Task broken down and added successfully!');
             } catch (error) {
+                console.error('Breakdown error:', error);
                 alert('Error breaking down task: ' + error.message);
             }
         }
@@ -337,6 +303,68 @@
                 reader.readAsText(file);
             }
         }
+
+        // Initialize everything when DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set default deadline to tomorrow
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            tomorrow.setHours(17, 0, 0, 0);
+            
+            const deadlineField = document.getElementById('task-deadline');
+            const eventStart = document.getElementById('event-start');
+            const eventEnd = document.getElementById('event-end');
+            
+            if (deadlineField) {
+                deadlineField.value = tomorrow.toISOString().slice(0, 16);
+            }
+            
+            if (eventStart && eventEnd) {
+                const now = new Date();
+                const hourLater = new Date();
+                hourLater.setHours(now.getHours() + 1);
+                
+                eventStart.value = now.toISOString().slice(0, 16);
+                eventEnd.value = hourLater.toISOString().slice(0, 16);
+            }
+            
+            // Set up settings form
+            const settingsForm = document.getElementById('settings-form');
+            if (settingsForm) {
+                settingsForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    const workStart = document.getElementById('work-start').value;
+                    const workEnd = document.getElementById('work-end').value;
+                    const startHour = parseInt(workStart.split(':')[0]);
+                    const endHour = parseInt(workEnd.split(':')[0]);
+                    
+                    const workDays = [];
+                    document.querySelectorAll('input[name="workday"]:checked').forEach(el => {
+                        workDays.push(parseInt(el.value));
+                    });
+                    
+                    const minBreak = parseInt(document.getElementById('min-break').value);
+                    const defaultDuration = parseInt(document.getElementById('default-duration').value);
+                    
+                    autoScheduler.settings.workingHours.start = startHour;
+                    autoScheduler.settings.workingHours.end = endHour;
+                    autoScheduler.settings.workDays = workDays;
+                    autoScheduler.settings.minBreakBetweenTasks = minBreak;
+                    autoScheduler.settings.defaultTaskDuration = defaultDuration;
+                    
+                    autoScheduler.autoScheduleTasks();
+                    autoScheduler.renderCalendar();
+                    
+                    alert('Settings saved!');
+                });
+            }
+
+            // Initialize integrations after a short delay to ensure autoScheduler is ready
+            setTimeout(() => {
+                initializeIntegrations();
+            }, 500);
+        });
     </script>
 </body>
 </html>
