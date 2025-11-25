@@ -15,8 +15,17 @@ class CalendarIntegrations {
    */
   async importGoogleCalendar(calendarUrl) {
     try {
+      // Google Calendar does not allow direct browser access (CORS).
+      // We must use a proxy to fetch the data.
+      // NOTE: 'corsproxy.io' is a public proxy for development. 
+      // In production, you should route this through your own backend.
+      const proxyUrl = "https://corsproxy.io/?";
+      const targetUrl = proxyUrl + encodeURIComponent(calendarUrl);
+
       const myHeaders = new Headers();
-      myHeaders.append("Cookie", "NID=526=Iy8527m3f2TfmIiAJg8YLJc9M_d03rxSjq6efRKMKcqid6rXuqPhDSBx8dvIbJV0xbNxe8Gp9tFh8OgzPU7XZz6OlHkDoTkkm7n55Gi4oAOC9ihRC3GjrqYjS0LawBJOROsApFk2xLxckFqKQi5P4Qg2PKr25zQ15IQmQGN9G2fbYB7HvNcqNuqqo9JMG81aWn4BbjS4");
+      // Google Calendar doesn't need the cookie for public iCal feeds, 
+      // and sending it via proxy might cause issues or be insecure.
+      // myHeaders.append("Cookie", "..."); 
       
       const requestOptions = {
         method: "GET",
@@ -24,7 +33,12 @@ class CalendarIntegrations {
         redirect: "follow"
       };
 
-      const response = await fetch(calendarUrl, requestOptions);
+      const response = await fetch(targetUrl, requestOptions);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch calendar: ${response.status} ${response.statusText}`);
+      }
+      
       const icalData = await response.text();
       
       // Parse iCal data
@@ -40,6 +54,7 @@ class CalendarIntegrations {
       
     } catch (error) {
       console.error('Error importing Google Calendar:', error);
+      alert('Failed to import Google Calendar. Ensure the link is a public iCal link.');
       throw error;
     }
   }
@@ -98,6 +113,9 @@ class CalendarIntegrations {
    * @returns {Date} JavaScript Date object
    */
   parseICalDate(dateStr) {
+    // Check if dateStr is undefined before processing
+    if (!dateStr) return new Date();
+
     // Remove any timezone indicators for simplicity
     dateStr = dateStr.replace(/[TZ]/g, '');
     
@@ -138,7 +156,7 @@ class CalendarIntegrations {
         redirect: "follow"
       };
 
-      // CHANGED: Use api/ToDo instead of api/Estimator to get subtasks instead of time estimates
+      // Use ToDo endpoint to get actual subtasks
       const response = await fetch("https://goblin.tools/api/ToDo", requestOptions);
       const result = await response.text();
       
