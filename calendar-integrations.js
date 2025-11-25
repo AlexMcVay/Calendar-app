@@ -10,13 +10,9 @@ class CalendarIntegrations {
 
   /**
    * Fetch and parse Google Calendar iCal feed
-   * @param {string} calendarUrl - iCal URL from Google Calendar
-   * @returns {Promise<Array>} Parsed events
    */
   async importGoogleCalendar(calendarUrl) {
     try {
-      // Google Calendar blocks direct browser access (CORS).
-      // We use a proxy to get around this for the prototype.
       const proxyUrl = "https://corsproxy.io/?";
       const targetUrl = proxyUrl + encodeURIComponent(calendarUrl);
 
@@ -32,11 +28,8 @@ class CalendarIntegrations {
       }
       
       const icalData = await response.text();
-      
-      // Parse iCal data
       const events = this.parseICalData(icalData);
       
-      // Add events to calendar
       events.forEach(event => {
         this.calendar.addEvent(event);
       });
@@ -53,8 +46,6 @@ class CalendarIntegrations {
 
   /**
    * Parse iCal format data into event objects
-   * @param {string} icalData - iCal formatted string
-   * @returns {Array} Array of event objects
    */
   parseICalData(icalData) {
     const events = [];
@@ -97,7 +88,7 @@ class CalendarIntegrations {
   }
 
   /**
-   * Parse iCal date format to JavaScript Date
+   * Parse iCal date format
    */
   parseICalDate(dateStr) {
     if (!dateStr) return new Date();
@@ -115,17 +106,18 @@ class CalendarIntegrations {
 
   /**
    * Get a duration estimate using Goblin Tools Estimator API
+   * This is the dedicated tool for automatic estimation.
    */
-  async breakdownTask(taskText, ancestors = [], spiciness = 2, exact = false) {
+  async getEstimate(taskText, spiciness = 2) {
     try {
       const myHeaders = new Headers();
       myHeaders.append("Content-Type", "application/json");
 
       const raw = JSON.stringify({
         "Text": taskText,
-        "Ancestors": ancestors,
+        "Ancestors": [],
         "Spiciness": spiciness,
-        "Exact": exact
+        "Exact": false
       });
 
       const requestOptions = {
@@ -135,82 +127,44 @@ class CalendarIntegrations {
         redirect: "follow"
       };
 
-      // URL set to Estimator as requested
       const response = await fetch("https://goblin.tools/api/Estimator", requestOptions);
       const result = await response.text();
       
-      console.log('Task estimate result:', result);
+      console.log(`Estimate fetched for "${taskText}":`, result);
       
-      // Estimator returns a plain string (e.g., "2 hours").
-      // We try to parse as JSON just in case, but usually return the text.
+      // Attempt to clean up JSON quotes if present, otherwise return raw text
       try {
         return JSON.parse(result);
       } catch (e) {
-        return result; // Return the plain text estimate
+        return result;
       }
       
     } catch (error) {
       console.error('Error fetching estimate:', error);
-      throw error;
+      return null;
     }
   }
 
   /**
-   * This function normally breaks down tasks, but with Estimator it will 
-   * add a single "subtask" containing the time estimate string.
+   * Break down a task (Legacy/Manual support)
    */
   async breakdownAndAddTask(taskText, taskOptions = {}, spiciness = 2) {
+    // This can reuse getEstimate or implement specific subtask logic
+    // For now, we keep it focused on the previous requirement if needed,
+    // or you can map it to getEstimate if you prefer.
     try {
-      // Get task estimate (returns a string like "2 hours")
-      const estimate = await this.breakdownTask(taskText, [], spiciness);
-      
-      // Handle the result as a list containing the estimate string
-      const subtasks = this.parseTaskBreakdown(estimate);
-      
-      // Calculate duration per subtask (defaults to settings if not provided)
-      const totalDuration = taskOptions.duration || this.calendar.settings.defaultTaskDuration;
-      
-      const addedTasks = [];
-      subtasks.forEach((subtask) => {
-        // Ensure the content is a string
-        const infoString = typeof subtask === 'string' ? subtask : JSON.stringify(subtask);
-        
+        const estimate = await this.getEstimate(taskText, spiciness);
         const task = this.calendar.addTask({
-          name: `${taskText} - Est: ${infoString}`, // Appends estimate to name
-          priority: taskOptions.priority || 5,
-          duration: totalDuration, 
-          deadline: taskOptions.deadline || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+            name: `${taskText} - (Est: ${estimate})`,
+            priority: taskOptions.priority || 5,
+            duration: taskOptions.duration || 60,
+            deadline: taskOptions.deadline
         });
-        addedTasks.push(task);
-      });
-      
-      console.log(`Added estimate info for: ${taskText}`);
-      return addedTasks;
-      
+        return [task];
     } catch (error) {
-      console.error('Error getting estimate:', error);
-      throw error;
+        console.error("Error in breakdownAndAddTask:", error);
+        throw error;
     }
-  }
-
-  /**
-   * Helper to ensure we return an array, even for a single string string
-   */
-  parseTaskBreakdown(breakdown) {
-    if (Array.isArray(breakdown)) return breakdown;
-    
-    // If it's a string (which Estimator returns), wrap it in an array
-    if (typeof breakdown === 'string') {
-        // Check if it's actually a JSON string we missed
-        try {
-            const parsed = JSON.parse(breakdown);
-            if (Array.isArray(parsed)) return parsed;
-        } catch (e) {
-            // It's just a plain text string
-            return [breakdown];
-        }
-    }
-    return [String(breakdown)];
   }
 }
 
