@@ -21,7 +21,6 @@
                 <button class="tab-button" onclick="openTab('settings-tab')">Settings</button>
             </div>
 
-            <!-- Tasks Tab -->
             <div id="tasks-tab" class="tab-content active">
                 <h2>Add New Task</h2>
                 <form id="task-form">
@@ -48,7 +47,6 @@
                 </form>
             </div>
 
-            <!-- Events Tab -->
             <div id="events-tab" class="tab-content">
                 <h2>Add Fixed Event</h2>
                 <form id="event-form">
@@ -68,7 +66,6 @@
                 </form>
             </div>
 
-            <!-- Integrations Tab -->
             <div id="integrations-tab" class="tab-content">
                 <h2>Calendar Integrations</h2>
                 
@@ -96,7 +93,6 @@
                 </div>
             </div>
 
-            <!-- Settings Tab -->
             <div id="settings-tab" class="tab-content">
                 <h2>Calendar Settings</h2>
                 <form id="settings-form">
@@ -163,8 +159,7 @@
         <div class="main-content">
             <h2>Your Schedule</h2>
             <div id="calendar">
-                <!-- Calendar will be rendered here -->
-            </div>
+                </div>
         </div>
     </div>
 
@@ -178,7 +173,14 @@
         function initializeIntegrations() {
             if (typeof autoScheduler !== 'undefined' && typeof CalendarIntegrations !== 'undefined') {
                 integrations = new CalendarIntegrations(autoScheduler);
-                console.log('Calendar integrations initialized successfully');
+                
+                // IMPORTANT: Connect the integrations back to the scheduler
+                // This allows the scheduler to call getEstimate() automatically
+                if (typeof autoScheduler.setIntegrations === 'function') {
+                    autoScheduler.setIntegrations(integrations);
+                }
+                
+                console.log('Calendar integrations initialized and connected');
                 return true;
             }
             return false;
@@ -197,7 +199,10 @@
             }
             
             document.getElementById(tabId).classList.add('active');
-            event.currentTarget.classList.add('active');
+            // Check if event is defined (it might not be if called programmatically)
+            if (typeof event !== 'undefined' && event.currentTarget) {
+                event.currentTarget.classList.add('active');
+            }
         }
 
         // Import from Google Calendar
@@ -218,13 +223,30 @@
             }
             
             try {
+                // Change button text to indicate loading
+                const btn = document.querySelector('button[onclick="importFromGoogleCalendar()"]');
+                const originalText = btn.innerText;
+                btn.innerText = "Importing...";
+                btn.disabled = true;
+
                 await integrations.importGoogleCalendar(calendarUrl);
                 autoScheduler.autoScheduleTasks();
                 autoScheduler.renderCalendar();
                 alert('Google Calendar imported successfully!');
+                
+                // Reset button
+                btn.innerText = originalText;
+                btn.disabled = false;
             } catch (error) {
                 console.error('Import error:', error);
                 alert('Error importing Google Calendar: ' + error.message);
+                
+                // Reset button on error too
+                const btn = document.querySelector('button[onclick="importFromGoogleCalendar()"]');
+                if (btn) {
+                    btn.innerText = "Import Google Calendar";
+                    btn.disabled = false;
+                }
             }
         }
 
@@ -249,6 +271,8 @@
             }
             
             try {
+                // Note: with the Estimator tool now active, this might behave differently 
+                // depending on how you implemented breakdownAndAddTask in the integrations file.
                 await integrations.breakdownAndAddTask(
                     taskName,
                     {
@@ -265,10 +289,10 @@
                 // Clear the form
                 document.getElementById('task-form').reset();
                 
-                alert('Task broken down and added successfully!');
+                alert('Task processed successfully!');
             } catch (error) {
                 console.error('Breakdown error:', error);
-                alert('Error breaking down task: ' + error.message);
+                alert('Error processing task: ' + error.message);
             }
         }
 
